@@ -523,7 +523,7 @@ class BuildRules:
                 for varname, value in variables.items():
                     build.write(f'  {varname} = {value}\n')
             
-            build.write('build vers.c: newvers\n')
+            build.write('build vers.c | version: newvers\n')
 
             build.write(f'build kernel.full: ld {" ".join(objs)}\n')
             build.write(f'build kernel.debug: extract_debug kernel.full\n')
