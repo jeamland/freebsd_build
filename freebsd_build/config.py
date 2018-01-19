@@ -34,6 +34,8 @@ class ConfigError(Exception):
 
 class KernelConfig:
     def __init__(self, filenames):
+        self.filename = filenames[-1]
+
         self.machine = None
         self.ident = None
         self.cpu = []
@@ -327,6 +329,10 @@ class BuildRules:
             'deps': 'gcc',
             'depfile': '.depend.$out'
         },
+        'freebsd-config':{
+            'command': 'freebsd-config -b . $in',
+            'generator': '1',
+        },
         'hack': {
             'command': 'touch hack.c && $CC -shared -nostdlib --target=x86_64-unknown-freebsd -fuse-ld=/Users/benno/src/llvm-build/bin/ld.lld hack.c -o $out && rm -f hack.c',
         },
@@ -398,6 +404,7 @@ class BuildRules:
         self.vars['CFLAGS'] = ' '.join(CFLAGS)
         cflags_genassym = [f for f in CFLAGS if f not in ('-flto', '-fno-common')]
         self.vars['CFLAGS_GENASSYM'] = ' '.join(cflags_genassym)
+        self.vars['KERNEL_CONFIG'] = self.config.filename
 
         for f in self.files:
             if not f.configured(self.config):
@@ -533,6 +540,9 @@ class BuildRules:
             build.write(f'build kernel.full: ld {" ".join(objs)}\n')
             build.write(f'build kernel.debug: extract_debug kernel.full\n')
             build.write(f'build kernel: strip_debug kernel.full | kernel.debug\n')
+
+            build.write('\n')
+            build.write(f'build build.ninja: freebsd-config $KERNEL_CONFIG\n')
 
 def as_rule(f, match):
     return (f.filename, [], 'as', [f.dependencies[0]], f.dependencies[1:], [], {})
