@@ -374,10 +374,14 @@ class BuildRules:
         'vnode_if.h'
     ]
 
-    def __init__(self, path, files, config):
+    def __init__(self, path, files, config, vars=None):
         self.path = path
         self.files = files
         self.config = config
+
+        self.vars = dict(self.DEFAULT_VARS)
+        if vars:
+            self.vars.update(vars)
 
         self.patterns = []
     
@@ -390,7 +394,7 @@ class BuildRules:
         early_builds = list(self.DEFAULT_BUILDS)
         builds = []
         before_depends = []
-        objs = []
+        objs = ['locore.o']
 
         filename = os.path.join(self.path, filename)
 
@@ -476,11 +480,10 @@ class BuildRules:
                         objs.append(build[0])
 
         objs.append('hack.pico')
-        objs.append('locore.o')
 
         with open(filename, 'w') as build:
             build.write(f'MACHINE = {self.config.machine}\n')
-            for name, value in self.DEFAULT_VARS.items():
+            for name, value in self.vars.items():
                 build.write(f'{name} = {value}\n')
 
             build.write('\n')
@@ -648,7 +651,9 @@ def generate(configfile, machine=None, srcpath=None, buildpath='build'):
         confdata = '\\n\\\n'.join(confdata) + '\\n\\\n'
         conf_c.write(KERNCONF_TEMPLATE.replace('%%KERNCONFFILE%%', confdata))
 
-    rules = BuildRules(buildpath, files, config)
+    rules = BuildRules(buildpath, files, config, {
+        'S': os.path.join(srcpath, 'sys'),
+    })
 
     rules.add_pattern(r'\$\{AWK\} -f (\S+) (\S+) > (\S+)', awk_stdout_rule)
     rules.add_pattern(r'\$\{AWK\} -f (\S+) (\S+)', awk_rule)
