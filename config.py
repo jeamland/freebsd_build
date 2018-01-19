@@ -348,9 +348,6 @@ class BuildRules:
     }
 
     DEFAULT_VARS = {
-        'S': '../../..',
-        'CFLAGS': '-O2 -pipe -fno-strict-aliasing -g -nostdinc --target=x86_64-unknown-freebsd -I. -I$S -I$S/contrib/libfdt -D_KERNEL -DHAVE_KERNEL_OPTION_HEADERS -include opt_global.h -fPIC -fno-common -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -MD -MF.depend.$out -MT$out -mcmodel=kernel -mno-red-zone -mno-mmx -mno-sse -msoft-float -fno-asynchronous-unwind-tables -ffreestanding -fwrapv -fstack-protector -gdwarf-2 -Wall -Wredundant-decls -Wnested-externs -Wstrict-prototypes -Wmissing-prototypes -Wpointer-arith -Winline -Wcast-qual -Wundef -Wno-pointer-sign -D__printf__=__freebsd_kprintf__ -Wmissing-include-dirs -fdiagnostics-show-option -Wno-unknown-pragmas -Wno-error-tautological-compare -Wno-error-empty-body -Wno-error-parentheses-equality -Wno-error-unused-function -Wno-error-pointer-sign -Wno-error-shift-negative-value -Wno-error-address-of-packed-member -mno-aes -mno-avx -std=iso9899:1999',
-        'CFLAGS_GENASSYM': '-O2 -pipe -fno-strict-aliasing -g -nostdinc --target=x86_64-unknown-freebsd -I. -I$S -I$S/contrib/libfdt -D_KERNEL -DHAVE_KERNEL_OPTION_HEADERS -include opt_global.h -fPIC -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -MD -MF.depend.$out -MT$out -mcmodel=kernel -mno-red-zone -mno-mmx -mno-sse -msoft-float -fno-asynchronous-unwind-tables -ffreestanding -fwrapv -fstack-protector -gdwarf-2 -Wall -Wredundant-decls -Wnested-externs -Wstrict-prototypes -Wmissing-prototypes -Wpointer-arith -Winline -Wcast-qual -Wundef -Wno-pointer-sign -D__printf__=__freebsd_kprintf__ -Wmissing-include-dirs -fdiagnostics-show-option -Wno-unknown-pragmas -Wno-error-tautological-compare -Wno-error-empty-body -Wno-error-parentheses-equality -Wno-error-unused-function -Wno-error-pointer-sign -Wno-error-shift-negative-value -Wno-error-address-of-packed-member -mno-aes -mno-avx -std=iso9899:1999',
         'ASM_CFLAGS': '-x assembler-with-cpp -DLOCORE $CFLAGS',
         'OBJCOPY': 'gobjcopy',
         'NM': 'nm',
@@ -397,6 +394,10 @@ class BuildRules:
         objs = ['locore.o']
 
         filename = os.path.join(self.path, filename)
+
+        self.vars['CFLAGS'] = ' '.join(CFLAGS)
+        cflags_genassym = [f for f in CFLAGS if f not in ('-flto', '-fno-common')]
+        self.vars['CFLAGS_GENASSYM'] = ' '.join(cflags_genassym)
 
         for f in self.files:
             if not f.configured(self.config):
@@ -483,6 +484,10 @@ class BuildRules:
 
         with open(filename, 'w') as build:
             build.write(f'MACHINE = {self.config.machine}\n')
+
+            for name in ('S', 'CFLAGS'):
+                value = self.vars.pop(name)
+                build.write(f'{name} = {value}\n')
             for name, value in self.vars.items():
                 build.write(f'{name} = {value}\n')
 
