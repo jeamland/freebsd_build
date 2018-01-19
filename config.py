@@ -577,22 +577,37 @@ def generate(configfile, machine=None, srcpath=None, buildpath='build'):
     if not os.path.exists(buildpath):
         os.mkdir(buildpath)
 
-    defaults = os.path.join(os.path.split(configfile)[0], 'DEFAULTS')
+    if srcpath is None:
+        srcpath = os.path.split(configfile)[0]  # .../conf
+        srcpath = os.path.split(srcpath)[0]     # .../<machine>
 
-    sysdir = os.path.split(os.path.abspath(configfile))[0]
-    sysdir = os.path.split(sysdir)[0]
-    sysdir = os.path.split(sysdir)[0]
+        syspath, m = os.path.split(srcpath)     # .../sys
+
+        if machine is None:
+            machine = m
+
+        srcpath = os.path.split(syspath)[0]
+    else:
+        syspath = os.path.join(srcpath, 'sys')
+    
+    if not os.path.exists(srcpath):
+        raise ConfigError(f"Bad src path: {srcpath}")
+
+    if machine is None:
+        defaults = os.path.join(os.path.split(configfile)[0], 'DEFAULTS')
+    else:
+        defaults = os.path.join(syspath, machine, 'conf', 'DEFAULTS')
 
     config = KernelConfig(filenames=[defaults, configfile])
 
     options = [
-        os.path.join(sysdir, 'conf', 'options'),
-        os.path.join(sysdir, 'conf', f'options.{config.machine}'),
+        os.path.join(syspath, 'conf', 'options'),
+        os.path.join(syspath, 'conf', f'options.{config.machine}'),
     ]
 
     files = [
-        os.path.join(sysdir, 'conf', 'files'),
-        os.path.join(sysdir, 'conf', f'files.{config.machine}'),
+        os.path.join(syspath, 'conf', 'files'),
+        os.path.join(syspath, 'conf', f'files.{config.machine}'),
     ]
 
     print(f'Machine: {config.machine}')
