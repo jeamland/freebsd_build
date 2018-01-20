@@ -6,6 +6,7 @@ import os
 import re
 
 from .kernel.files import Files
+from .kernel.options import Options
 
 
 CFLAGS = '-O2 -pipe -fno-strict-aliasing -g -nostdinc --target=x86_64-unknown-freebsd -I. -I$S -I$S/contrib/libfdt -D_KERNEL -DHAVE_KERNEL_OPTION_HEADERS -include opt_global.h -fPIC -fno-common -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -MD -MF.depend.$out -MT$out -mcmodel=kernel -mno-red-zone -mno-mmx -mno-sse -msoft-float -fno-asynchronous-unwind-tables -ffreestanding -fwrapv -fstack-protector -gdwarf-2 -Wall -Wredundant-decls -Wnested-externs -Wstrict-prototypes -Wmissing-prototypes -Wpointer-arith -Winline -Wcast-qual -Wundef -Wno-pointer-sign -D__printf__=__freebsd_kprintf__ -Wmissing-include-dirs -fdiagnostics-show-option -Wno-unknown-pragmas -Wno-error-tautological-compare -Wno-error-empty-body -Wno-error-parentheses-equality -Wno-error-unused-function -Wno-error-pointer-sign -Wno-error-shift-negative-value -Wno-error-address-of-packed-member -mno-aes -mno-avx -std=iso9899:1999'.split()
@@ -99,53 +100,6 @@ class KernelConfig:
     def directive_device(self, value):
         self.options[f'DEV_{value.upper()}'] = '1'
         self.devices.add(value)
-
-
-class Options(dict):
-    def __init__(self, filenames):
-        self['MAXUSERS'] = 'opt_maxusers.h'
-
-        for filename in filenames:
-            with open(filename) as fp:
-                self.parse_data(fp.read())
-
-    def parse_data(self, data):
-        for line in data.splitlines():
-            if line.startswith('#'):
-                continue
-            comment = line.find('#')
-            if comment != -1:
-                line = line[:comment]
-            line = line.strip()
-            if not line:
-                continue
-
-            try:
-                option, header = line.split()
-            except ValueError:
-                option = line.strip()
-                header = f'opt_{option.lower()}.h'
-
-            self[option] = header
-
-    def write_headers(self, path, config):
-        optfiles = {filename: [] for filename in self.values()}
-
-        for option, value in config.options.items():
-            if option not in self and option.startswith('DEV_'):
-                filename = f'opt_{option[4:].lower()}.h'
-                optfiles[filename] = [(option, value)]
-            else:
-                filename = self[option]
-                optfiles[filename].append((option, value))
-        
-        for filename, options in optfiles.items():
-            with open(os.path.join(path, filename), 'w') as optfile:
-                for option, value in options:
-                    optfile.write(f'#define {option}')
-                    if value:
-                        optfile.write(f' {value}')
-                    optfile.write('\n')
 
 
 class BuildRules:
