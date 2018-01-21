@@ -7,13 +7,13 @@ CFLAGS = '-O2 -pipe -fno-strict-aliasing -g -nostdinc --target=x86_64-unknown-fr
 
 
 class Build:
-    def __init__(self, output, implicit_outputs, rule, inputs, implicit_dependencies, order_dependencies, variables=None):
+    def __init__(self, output, rule, inputs=None, implicit_outputs=None, implicit_dependencies=None, order_dependencies=None, variables=None):
         self.output = output
-        self.implicit_outputs = implicit_outputs
         self.rule = rule
-        self.inputs = inputs
-        self.implicit_dependencies = implicit_dependencies
-        self.order_dependencies = order_dependencies
+        self.inputs = inputs or []
+        self.implicit_outputs = implicit_outputs or []
+        self.implicit_dependencies = implicit_dependencies or []
+        self.order_dependencies = order_dependencies or []
         self.variables = variables or {}
 
     def __str__(self):
@@ -81,15 +81,15 @@ class BuildRules:
     }
 
     DEFAULT_BUILDS = [
-        Build('machine', [], 'ilink', ['$S/$MACHINE/include'], [], [], {}),
-        Build('x86', [], 'ilink', ['$S/x86/include'], [], [], {}),
-        Build('vnode_if.h', [], 'awk', ['$S/tools/vnode_if.awk', '$S/kern/vnode_if.src'], [], [], {'args': '-h'}),
-        Build('vnode_if_newproto.h', [], 'awk', ['$S/tools/vnode_if.awk', '$S/kern/vnode_if.src'], [], [], {'args': '-p'}),
-        Build('vnode_if_typedef.h', [], 'awk', ['$S/tools/vnode_if.awk', '$S/kern/vnode_if.src'], [], [], {'args': '-q'}),
-        Build('vnode_if.c', [], 'awk', ['$S/tools/vnode_if.awk', '$S/kern/vnode_if.src'], [], [], {'args': '-c'}),
-        Build('genassym.o', [], 'cc', ['$S/$MACHINE/$MACHINE/genassym.c'], [], [], {'CFLAGS': '$CFLAGS_GENASSYM'}),
-        Build('assym.s', [], 'sh_stdout', ['$S/kern/genassym.sh', 'genassym.o'], [], [], {'env': "NM='nm' NMFLAGS=''"}),
-        Build('hack.pico', [], 'hack', [], [], [], {}),
+        Build('machine', 'ilink', ['$S/$MACHINE/include']),
+        Build('x86', 'ilink', ['$S/x86/include']),
+        Build('vnode_if.h', 'awk', ['$S/tools/vnode_if.awk', '$S/kern/vnode_if.src'], variables={'args': '-h'}),
+        Build('vnode_if_newproto.h', 'awk', ['$S/tools/vnode_if.awk', '$S/kern/vnode_if.src'], variables={'args': '-p'}),
+        Build('vnode_if_typedef.h', 'awk', ['$S/tools/vnode_if.awk', '$S/kern/vnode_if.src'], variables={'args': '-q'}),
+        Build('vnode_if.c', 'awk', ['$S/tools/vnode_if.awk', '$S/kern/vnode_if.src'], variables={'args': '-c'}),
+        Build('genassym.o', 'cc', ['$S/$MACHINE/$MACHINE/genassym.c'], variables={'CFLAGS': '$CFLAGS_GENASSYM'}),
+        Build('assym.s', 'sh_stdout', ['$S/kern/genassym.sh', 'genassym.o'], variables={'env': "NM='nm' NMFLAGS=''"}),
+        Build('hack.pico', 'hack'),
     ]
 
     DEFAULT_IMPLICIT_DEPS = [
@@ -147,7 +147,7 @@ class BuildRules:
                     src = f.filename
                     if not f.local:
                         src = f'$S/{src}'
-                    builds.append(Build(obj, [], 'cc', [src], [], [], {}))
+                    builds.append(Build(obj, 'cc', [src]))
                     if f.obj:
                         objs.append(obj)
                 elif extension == 'm':
@@ -157,20 +157,20 @@ class BuildRules:
                     obj = obj[:-1] + 'o'
 
                     builds.extend([
-                        Build(c_obj, [], 'awk', ['$S/tools/makeobjops.awk', f'$S/{f.filename}'], [], [], {'args': '-c'}),
-                        Build(obj, [], 'cc', [c_obj], [], [], {}),
+                        Build(c_obj, 'awk', ['$S/tools/makeobjops.awk', f'$S/{f.filename}'], variables={'args': '-c'}),
+                        Build(obj, 'cc', [c_obj]),
                     ])
 
                     before_depends.append(h_obj)
                     early_builds.append(
-                        Build(h_obj, [], 'awk', ['$S/tools/makeobjops.awk', f'$S/{f.filename}'], [], [], {'args': '-h'})
+                        Build(h_obj, 'awk', ['$S/tools/makeobjops.awk', f'$S/{f.filename}'], variables={'args': '-h'})
                     )
                     if f.obj:
                         objs.append(obj)
                 elif extension == 'S':
                     obj = os.path.split(f.filename)[1]
                     obj = obj[:-1] + 'o'
-                    builds.append(Build(obj, [], 'as', [f'$S/{f.filename}'], [], [], {}))
+                    builds.append(Build(obj, 'as', [f'$S/{f.filename}']))
                     if f.obj:
                         objs.append(obj)
                 else:
@@ -204,7 +204,7 @@ class BuildRules:
                         rule_name = rules[rule] = f'rule{rule_counter}'
                         rule_counter += 1
 
-                    build = Build(f.filename, [], rule_name, f.dependencies, [], [], {})
+                    build = Build(f.filename, rule_name, f.dependencies)
                     if f.before_depend:
                         before_depends.append(build.output)
                         early_builds.append(build)
@@ -256,17 +256,17 @@ class BuildRules:
 @BuildRules.add_for_pattern(r'\$\{AWK\} -f (\S+) (\S+) > (\S+)')
 def awk_stdout_rule(f, match):
     groups = match.groups()
-    return Build(groups[-1], [], 'awk_stdout', groups[:-1], [], [], {})
+    return Build(groups[-1], 'awk_stdout', groups[:-1])
 
 
 @BuildRules.add_for_pattern(r'\$\{AWK\} -f (\S+) (\S+)')
 def awk_rule(f, match):
-    return Build(f.filename, [], 'awk', match.groups(), [], [], {})
+    return Build(f.filename, 'awk', match.groups())
 
 
 @BuildRules.add_for_pattern(r'\$\{NORMAL_S\}')
 def as_rule(f, match):
-    return Build(f.filename, [], 'as', [f.dependencies[0]], f.dependencies[1:], [], {})
+    return Build(f.filename, 'as', [f.dependencies[0]], implicit_dependencies=f.dependencies[1:])
 
 
 @BuildRules.add_for_pattern(r'^\$\{NORMAL_C')
@@ -298,11 +298,11 @@ def cc_rule(f, match):
                     cflags = [f for f in cflags if f != arg]
 
 
-    return Build(obj, [], 'cc', deps, imp_deps, [], {'CFLAGS': ' '.join(cflags)})
+    return Build(obj, 'cc', deps, implicit_dependencies=imp_deps, variables={'CFLAGS': ' '.join(cflags)})
 
 
 @BuildRules.add_for_pattern(r'.*(\$S/kern/genassym.sh) (\S+)')
 def genassym_rule(f, match):
     genassym, src = match.groups()
 
-    return Build(f.filename, [], 'sh_stdout', match.groups(), [], [], {'env': "NM='nm' NMFLAGS=''"})
+    return Build(f.filename, 'sh_stdout', match.groups(), variables={'env': "NM='nm' NMFLAGS=''"})
