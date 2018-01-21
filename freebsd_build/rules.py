@@ -6,6 +6,32 @@ import re
 CFLAGS = '-O2 -pipe -fno-strict-aliasing -g -nostdinc --target=x86_64-unknown-freebsd -I. -I$S -I$S/contrib/libfdt -D_KERNEL -DHAVE_KERNEL_OPTION_HEADERS -include opt_global.h -fPIC -fno-common -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -MD -MF.depend.$out -MT$out -mcmodel=kernel -mno-red-zone -mno-mmx -mno-sse -msoft-float -fno-asynchronous-unwind-tables -ffreestanding -fwrapv -fstack-protector -gdwarf-2 -Wall -Wredundant-decls -Wnested-externs -Wstrict-prototypes -Wmissing-prototypes -Wpointer-arith -Winline -Wcast-qual -Wundef -Wno-pointer-sign -D__printf__=__freebsd_kprintf__ -Wmissing-include-dirs -fdiagnostics-show-option -Wno-unknown-pragmas -Wno-error-tautological-compare -Wno-error-empty-body -Wno-error-parentheses-equality -Wno-error-unused-function -Wno-error-pointer-sign -Wno-error-shift-negative-value -Wno-error-address-of-packed-member -mno-aes -mno-avx -std=iso9899:1999'.split()
 
 
+class Build:
+    def __init__(self, output, implicit_outputs, rule, inputs, implicit_dependencies, order_dependencies, variables=None):
+        self.output = output
+        self.implicit_outputs = implicit_outputs
+        self.rule = rule
+        self.inputs = inputs
+        self.implicit_dependencies = implicit_dependencies
+        self.order_dependencies = order_dependencies
+        self.variables = variables or {}
+
+    def __str__(self):
+        build = f'build {self.output}'
+        if self.implicit_outputs:
+            build += f' | {" ".join(self.implicit_outputs)}'
+        build += f': {self.rule} {" ".join(self.inputs)}'
+        if self.implicit_dependencies:
+            build += f' | {" ".join(self.implicit_dependencies)}'
+        if self.order_dependencies:
+            build += f' || {" ".join(self.order_dependencies)}'
+        if self.variables:
+            for name, value in self.variables.items():
+                build += f'\n  {name} = {value}'
+
+        return build
+
+
 class BuildRules:
     DEFAULT_RULE_DEFINITIONS = {
         'as': {
@@ -55,15 +81,15 @@ class BuildRules:
     }
 
     DEFAULT_BUILDS = [
-        ('machine', [], 'ilink', ['$S/$MACHINE/include'], [], [], {}),
-        ('x86', [], 'ilink', ['$S/x86/include'], [], [], {}),
-        ('vnode_if.h', [], 'awk', ['$S/tools/vnode_if.awk', '$S/kern/vnode_if.src'], [], [], {'args': '-h'}),
-        ('vnode_if_newproto.h', [], 'awk', ['$S/tools/vnode_if.awk', '$S/kern/vnode_if.src'], [], [], {'args': '-p'}),
-        ('vnode_if_typedef.h', [], 'awk', ['$S/tools/vnode_if.awk', '$S/kern/vnode_if.src'], [], [], {'args': '-q'}),
-        ('vnode_if.c', [], 'awk', ['$S/tools/vnode_if.awk', '$S/kern/vnode_if.src'], [], [], {'args': '-c'}),
-        ('genassym.o', [], 'cc', ['$S/$MACHINE/$MACHINE/genassym.c'], [], [], {'CFLAGS': '$CFLAGS_GENASSYM'}),
-        ('assym.s', [], 'sh_stdout', ['$S/kern/genassym.sh', 'genassym.o'], [], [], {'env': "NM='nm' NMFLAGS=''"}),
-        ('hack.pico', [], 'hack', [], [], [], {}),
+        Build('machine', [], 'ilink', ['$S/$MACHINE/include'], [], [], {}),
+        Build('x86', [], 'ilink', ['$S/x86/include'], [], [], {}),
+        Build('vnode_if.h', [], 'awk', ['$S/tools/vnode_if.awk', '$S/kern/vnode_if.src'], [], [], {'args': '-h'}),
+        Build('vnode_if_newproto.h', [], 'awk', ['$S/tools/vnode_if.awk', '$S/kern/vnode_if.src'], [], [], {'args': '-p'}),
+        Build('vnode_if_typedef.h', [], 'awk', ['$S/tools/vnode_if.awk', '$S/kern/vnode_if.src'], [], [], {'args': '-q'}),
+        Build('vnode_if.c', [], 'awk', ['$S/tools/vnode_if.awk', '$S/kern/vnode_if.src'], [], [], {'args': '-c'}),
+        Build('genassym.o', [], 'cc', ['$S/$MACHINE/$MACHINE/genassym.c'], [], [], {'CFLAGS': '$CFLAGS_GENASSYM'}),
+        Build('assym.s', [], 'sh_stdout', ['$S/kern/genassym.sh', 'genassym.o'], [], [], {'env': "NM='nm' NMFLAGS=''"}),
+        Build('hack.pico', [], 'hack', [], [], [], {}),
     ]
 
     DEFAULT_IMPLICIT_DEPS = [
@@ -121,7 +147,7 @@ class BuildRules:
                     src = f.filename
                     if not f.local:
                         src = f'$S/{src}'
-                    builds.append((obj, [], 'cc', [src], [], [], {}))
+                    builds.append(Build(obj, [], 'cc', [src], [], [], {}))
                     if f.obj:
                         objs.append(obj)
                 elif extension == 'm':
@@ -131,20 +157,20 @@ class BuildRules:
                     obj = obj[:-1] + 'o'
 
                     builds.extend([
-                        (c_obj, [], 'awk', ['$S/tools/makeobjops.awk', f'$S/{f.filename}'], [], [], {'args': '-c'}),
-                        (obj, [], 'cc', [c_obj], [], [], {}),
+                        Build(c_obj, [], 'awk', ['$S/tools/makeobjops.awk', f'$S/{f.filename}'], [], [], {'args': '-c'}),
+                        Build(obj, [], 'cc', [c_obj], [], [], {}),
                     ])
 
                     before_depends.append(h_obj)
                     early_builds.append(
-                        (h_obj, [], 'awk', ['$S/tools/makeobjops.awk', f'$S/{f.filename}'], [], [], {'args': '-h'})
+                        Build(h_obj, [], 'awk', ['$S/tools/makeobjops.awk', f'$S/{f.filename}'], [], [], {'args': '-h'})
                     )
                     if f.obj:
                         objs.append(obj)
                 elif extension == 'S':
                     obj = os.path.split(f.filename)[1]
                     obj = obj[:-1] + 'o'
-                    builds.append((obj, [], 'as', [f'$S/{f.filename}'], [], [], {}))
+                    builds.append(Build(obj, [], 'as', [f'$S/{f.filename}'], [], [], {}))
                     if f.obj:
                         objs.append(obj)
                 else:
@@ -157,13 +183,13 @@ class BuildRules:
 
                     build = processor(f, match)
                     if f.before_depend:
-                        before_depends.append(build[0])
+                        before_depends.append(build.output)
                         early_builds.append(build)
                     else:
                         builds.append(build)
 
                     if f.obj:
-                        objs.append(build[0])
+                        objs.append(build.output)
 
                     break
                 else:
@@ -178,15 +204,15 @@ class BuildRules:
                         rule_name = rules[rule] = f'rule{rule_counter}'
                         rule_counter += 1
 
-                    build = (f.filename, [], rule_name, f.dependencies, [], [], {})
+                    build = Build(f.filename, [], rule_name, f.dependencies, [], [], {})
                     if f.before_depend:
-                        before_depends.append(build[0])
+                        before_depends.append(build.output)
                         early_builds.append(build)
                     else:
                         builds.append(build)
 
                     if f.obj:
-                        objs.append(build[0])
+                        objs.append(build.output)
 
         objs.append('hack.pico')
 
@@ -211,30 +237,11 @@ class BuildRules:
                 build.write(f'rule {name}\n  command = {command}\n')
             build.write('\n')
 
-            for obj, implicit_outs, rule, deps, implicit_deps, order_deps, variables in early_builds:
-                build.write(f'build {obj}')
-                if implicit_outs:
-                    build.write(f' | {" ".join(implicit_outs)}')
-                build.write(f': {rule} {" ".join(deps)}')
-                if implicit_deps:
-                    build.write(f' | {" ".join(implicit_deps)}')
-                if order_deps:
-                    build.write(f' || {" ".join(order_deps)}')
-                build.write('\n')
-                for varname, value in variables.items():
-                    build.write(f'  {varname} = {value}\n')
+            for b in early_builds:
+                build.write(f'{b}\n')
 
-            for obj, implicit_outs, rule, deps, implicit_deps, order_deps, variables in builds:
-                build.write(f'build {obj}')
-                if implicit_outs:
-                    build.write(f' | {" ".join(implicit_outs)}')
-                build.write(f': {rule} {" ".join(deps)}')
-                build.write(f' | {" ".join(before_depends + implicit_deps)}')
-                if order_deps:
-                    build.write(f' || {" ".join(order_deps)}')
-                build.write('\n')
-                for varname, value in variables.items():
-                    build.write(f'  {varname} = {value}\n')
+            for b in builds:
+                build.write(f'{b}\n')
             
             build.write('build vers.c | version: newvers\n')
 
@@ -249,17 +256,17 @@ class BuildRules:
 @BuildRules.add_for_pattern(r'\$\{AWK\} -f (\S+) (\S+) > (\S+)')
 def awk_stdout_rule(f, match):
     groups = match.groups()
-    return (groups[-1], [], 'awk_stdout', groups[:-1], [], [], {})
+    return Build(groups[-1], [], 'awk_stdout', groups[:-1], [], [], {})
 
 
 @BuildRules.add_for_pattern(r'\$\{AWK\} -f (\S+) (\S+)')
 def awk_rule(f, match):
-    return (f.filename, [], 'awk', match.groups(), [], [], {})
+    return Build(f.filename, [], 'awk', match.groups(), [], [], {})
 
 
 @BuildRules.add_for_pattern(r'\$\{NORMAL_S\}')
 def as_rule(f, match):
-    return (f.filename, [], 'as', [f.dependencies[0]], f.dependencies[1:], [], {})
+    return Build(f.filename, [], 'as', [f.dependencies[0]], f.dependencies[1:], [], {})
 
 
 @BuildRules.add_for_pattern(r'^\$\{NORMAL_C')
@@ -291,11 +298,11 @@ def cc_rule(f, match):
                     cflags = [f for f in cflags if f != arg]
 
 
-    return (obj, [], 'cc', deps, imp_deps, [], {'CFLAGS': ' '.join(cflags)})
+    return Build(obj, [], 'cc', deps, imp_deps, [], {'CFLAGS': ' '.join(cflags)})
 
 
 @BuildRules.add_for_pattern(r'.*(\$S/kern/genassym.sh) (\S+)')
 def genassym_rule(f, match):
     genassym, src = match.groups()
 
-    return (f.filename, [], 'sh_stdout', match.groups(), [], [], {'env': "NM='nm' NMFLAGS=''"})
+    return Build(f.filename, [], 'sh_stdout', match.groups(), [], [], {'env': "NM='nm' NMFLAGS=''"})
