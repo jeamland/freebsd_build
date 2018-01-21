@@ -108,13 +108,13 @@ class BuildRules:
             self.vars.update(vars)
 
     @classmethod    
-    def add_pattern(cls, pattern, processor):
+    def add_processor(cls, pattern, processor):
         cls.PATTERNS.append((re.compile(pattern), processor))
     
     @classmethod
     def add_for_pattern(cls, pattern):
         def f(processor):
-            cls.add_pattern(pattern, processor)
+            cls.add_processor(pattern, processor)
             return processor
         return f
 
