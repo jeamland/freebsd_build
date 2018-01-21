@@ -29,7 +29,7 @@ class Build:
             for name, value in self.variables.items():
                 build += f'\n  {name} = {value}'
 
-        return build
+        return build + '\n'
 
 
 class BuildRules:
@@ -238,10 +238,10 @@ class BuildRules:
             build.write('\n')
 
             for b in early_builds:
-                build.write(f'{b}\n')
+                build.write(str(b))
 
             for b in builds:
-                build.write(f'{b}\n')
+                build.write(str(b))
             
             build.write('build vers.c | version: newvers\n')
 
